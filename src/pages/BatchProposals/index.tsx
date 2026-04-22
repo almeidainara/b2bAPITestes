@@ -530,6 +530,7 @@ export function BatchProposalsPage() {
                     <Tooltip title="Verificar elegibilidade antes de criar"><span>Elig.</span></Tooltip>
                   </TableCell>
                   <TableCell sx={{ fontWeight: 600, width: 120 }}>Status</TableCell>
+                  <TableCell sx={{ fontWeight: 600 }}>ID da Proposta</TableCell>
                   <TableCell sx={{ width: 40 }} />
                 </TableRow>
               </TableHead>
@@ -606,6 +607,20 @@ export function BatchProposalsPage() {
                           <StatusChip status={result?.status ?? 'idle'} />
                         </TableCell>
 
+                        {/* ID da proposta criada */}
+                        <TableCell>
+                          {result?.proposalId ? (
+                            <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
+                              <Typography variant="caption" sx={{ fontFamily: 'monospace', fontSize: '0.72rem' }} noWrap>
+                                {result.proposalId}
+                              </Typography>
+                              <CopyButton value={result.proposalId} />
+                            </Stack>
+                          ) : (
+                            <Typography variant="caption" color="text.disabled">—</Typography>
+                          )}
+                        </TableCell>
+
                         {/* Expand button — só aparece se tem resultado */}
                         <TableCell>
                           {(result?.eligibilityTrace || result?.proposalTrace) && (
@@ -618,7 +633,7 @@ export function BatchProposalsPage() {
 
                       {/* ── Linha de detalhes (collapse) ── */}
                       <TableRow>
-                        <TableCell colSpan={7} sx={{ p: 0, border: 0 }}>
+                        <TableCell colSpan={8} sx={{ p: 0, border: 0 }}>
                           <Collapse in={isExpanded} unmountOnExit>
                             <Box sx={{ p: 2, backgroundColor: `${tokens.colors.neutral[95]}`, borderBottom: `1px solid ${tokens.colors.neutral[80]}` }}>
                               {result?.eligibilityTrace && (
