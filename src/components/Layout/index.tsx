@@ -254,7 +254,9 @@ export function Layout() {
             overflowY: 'auto',
           }}
         >
-          <Outlet />
+          <Box sx={{ maxWidth: 1440, mx: 'auto' }}>
+            <Outlet />
+          </Box>
         </Box>
       </Box>
     </Box>

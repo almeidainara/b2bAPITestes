@@ -221,8 +221,11 @@ function AutoCreateDrawer({ open, onClose, product }: AutoCreateDrawerProps) {
 
   // ── Executar tudo ───────────────────────────────────────────────────────────
 
+  const isConsultant = activeCredential?.authType === 'consultant'
+
   const runAll = async () => {
     if (!activeCredential) { pushNotification('warning', 'Selecione uma credencial'); return }
+    if (isConsultant) { pushNotification('error', 'Consultor não pode criar propostas — use afiliado ou parceiro'); return }
     resetSteps()
     await runEligibility()   // informativo, não bloqueia
     if (!isHomeRefi) {
@@ -293,6 +296,14 @@ function AutoCreateDrawer({ open, onClose, product }: AutoCreateDrawerProps) {
       </Box>
 
       <Box sx={{ flex: 1, overflow: 'auto', p: 3 }}>
+        {/* Aviso de consultor */}
+        {isConsultant && (
+          <Alert severity="error" sx={{ mb: 2 }}>
+            Credenciais de <strong>consultor</strong> não têm permissão para criar propostas.
+            Use um login de <strong>afiliado</strong> ou uma credencial de <strong>parceiro</strong> (consumer_key).
+          </Alert>
+        )}
+
         {/* Stepper */}
         <Stepper activeStep={activeStep >= 0 ? activeStep : completedStep} sx={{ mb: 3 }}>
           {stepLabels.map((label, i) => (
@@ -454,8 +465,8 @@ function AutoCreateDrawer({ open, onClose, product }: AutoCreateDrawerProps) {
           <Button
             variant="outlined" size="small"
             startIcon={steps.eligibility.status === 'running' ? <CircularProgress size={14} /> : stepIcon(steps.eligibility.status, 0)}
-            onClick={() => { if (!activeCredential) { pushNotification('warning', 'Selecione uma credencial'); return }; runEligibility() }}
-            disabled={steps.eligibility.status === 'running'}
+            onClick={() => { if (!activeCredential) { pushNotification('warning', 'Selecione uma credencial'); return }; if (isConsultant) { pushNotification('error', 'Consultor não pode criar propostas'); return }; runEligibility() }}
+            disabled={steps.eligibility.status === 'running' || isConsultant}
           >
             1. Verificar elegibilidade
           </Button>
@@ -472,8 +483,8 @@ function AutoCreateDrawer({ open, onClose, product }: AutoCreateDrawerProps) {
           <Button
             variant="outlined" size="small"
             startIcon={steps.proposal.status === 'running' ? <CircularProgress size={14} /> : stepIcon(steps.proposal.status, isHomeRefi ? 1 : 2)}
-            onClick={() => { if (!activeCredential) { pushNotification('warning', 'Selecione uma credencial'); return }; runProposal() }}
-            disabled={steps.proposal.status === 'running'}
+            onClick={() => { if (!activeCredential) { pushNotification('warning', 'Selecione uma credencial'); return }; if (isConsultant) { pushNotification('error', 'Consultor não pode criar propostas'); return }; runProposal() }}
+            disabled={steps.proposal.status === 'running' || isConsultant}
           >
             {isHomeRefi ? '2.' : '3.'} Criar proposta
           </Button>
@@ -482,7 +493,7 @@ function AutoCreateDrawer({ open, onClose, product }: AutoCreateDrawerProps) {
             variant="contained" size="small"
             startIcon={Object.values(steps).some(s => s.status === 'running') ? <CircularProgress size={14} color="inherit" /> : <AutoFixHighIcon />}
             onClick={runAll}
-            disabled={Object.values(steps).some(s => s.status === 'running')}
+            disabled={Object.values(steps).some(s => s.status === 'running') || isConsultant}
           >
             Executar tudo
           </Button>

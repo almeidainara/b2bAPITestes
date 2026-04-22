@@ -261,6 +261,7 @@ export function BatchProposalsPage() {
   // ── Executar lote ──
   const handleRun = async () => {
     if (!activeCredential) { pushNotification('error', 'Selecione uma credencial'); return }
+    if (isConsultant) { pushNotification('error', 'Consultor não pode criar propostas — use afiliado ou parceiro'); return }
 
     // CPFs e emails frescos para garantir consistência elig ↔ proposta
     const freshCpfs = randomTestCpfs(configs.length)
@@ -320,9 +321,11 @@ export function BatchProposalsPage() {
     pushNotification(err===0 ? 'success' : ok>0 ? 'warning' : 'error', `Lote concluído: ${ok} sucesso(s), ${err} erro(s)`)
   }
 
-  const successCount = results.filter(r => r.status==='success').length
-  const errorCount   = results.filter(r => r.status==='error').length
-  const idleCount    = results.filter(r => r.status==='idle').length
+  const successCount  = results.filter(r => r.status==='success').length
+  const errorCount    = results.filter(r => r.status==='error').length
+  const idleCount     = results.filter(r => r.status==='idle').length
+  const isConsultant  = activeCredential?.authType === 'consultant'
+  const canRun        = !!activeCredential && !isConsultant && !running
 
   return (
     <Box>
@@ -337,16 +340,16 @@ export function BatchProposalsPage() {
         {configs.length > 0 && !running && (
           <Stack direction="row" spacing={1}>
             <Tooltip title="Gera novos dados aleatórios mantendo elig./BACEN da tabela">
-              <Button variant="outlined" color="secondary" size="small" startIcon={<CasinoIcon />} onClick={handleRandomize} disabled={hasRun && running}>
+              <Button variant="outlined" color="secondary" size="small" startIcon={<CasinoIcon />} onClick={handleRandomize}>
                 Aleatorizar
               </Button>
             </Tooltip>
             <Button
               variant="contained"
               size="small"
-              startIcon={running ? <CircularProgress size={16} color="inherit" /> : <PlayArrowIcon />}
+              startIcon={<PlayArrowIcon />}
               onClick={handleRun}
-              disabled={running || !activeCredential}
+              disabled={!canRun}
             >
               Executar lote
             </Button>
@@ -361,7 +364,13 @@ export function BatchProposalsPage() {
 
       {!activeCredential && (
         <Alert severity="warning" sx={{ mb: 2 }}>
-          Selecione uma credencial de afiliado ativa para executar o lote.
+          Selecione uma credencial de afiliado ou parceiro para executar o lote.
+        </Alert>
+      )}
+      {isConsultant && (
+        <Alert severity="error" sx={{ mb: 2 }}>
+          Credenciais de <strong>consultor</strong> não têm permissão para criar propostas.
+          Use um login de <strong>afiliado</strong> ou uma credencial de <strong>parceiro</strong> (consumer_key).
         </Alert>
       )}
 
@@ -399,12 +408,12 @@ export function BatchProposalsPage() {
         <Collapse in={configOpen}>
           <Divider />
           <Box sx={{ p: 2.5 }}>
-            <Grid container spacing={2} sx={{ alignItems: 'flex-end' }}>
+            <Grid container spacing={2.5} sx={{ alignItems: 'flex-start' }}>
+
+              {/* Total de propostas */}
               <Grid size={{ xs: 12, sm: 3 }}>
                 <TextField
-                  fullWidth
-                  size="small"
-                  type="number"
+                  fullWidth size="small" type="number"
                   label="Total de propostas"
                   value={totalInput}
                   onChange={e => {
@@ -414,38 +423,93 @@ export function BatchProposalsPage() {
                     if (bacenInput > v) setBacenInput(v)
                   }}
                   slotProps={{ htmlInput: { min: 1, max: 20 } }}
-                  helperText="Máx. 20"
                 />
+                <Stack direction="row" spacing={0.75} sx={{ mt: 1 }}>
+                  {[1, 5, 10].map(n => (
+                    <Button
+                      key={n}
+                      size="small"
+                      variant="outlined"
+                      sx={{ minWidth: 0, px: 1.25, fontSize: '0.72rem', flex: 1 }}
+                      onClick={() => {
+                        const v = n === 1 ? 1 : Math.min(20, totalInput + n)
+                        setTotalInput(v)
+                        if (eligInput > v) setEligInput(v)
+                        if (bacenInput > v) setBacenInput(v)
+                      }}
+                    >
+                      {n === 1 ? '1' : `+${n}`}
+                    </Button>
+                  ))}
+                </Stack>
               </Grid>
+
+              {/* Com elegibilidade */}
               <Grid size={{ xs: 12, sm: 3 }}>
                 <TextField
-                  fullWidth
-                  size="small"
-                  type="number"
+                  fullWidth size="small" type="number"
                   label="Com elegibilidade"
                   value={eligInput}
                   onChange={e => setEligInput(Math.max(0, Math.min(totalInput, Number(e.target.value))))}
                   slotProps={{ htmlInput: { min: 0, max: totalInput } }}
                   helperText={`0 – ${totalInput}`}
                 />
+                <Stack direction="row" spacing={0.75} sx={{ mt: 0.25 }}>
+                  {(['Todas', 'Metade', 'Nenhuma'] as const).map(opt => (
+                    <Button
+                      key={opt}
+                      size="small"
+                      variant="outlined"
+                      color="secondary"
+                      sx={{ minWidth: 0, px: 1, fontSize: '0.72rem', flex: 1 }}
+                      onClick={() => {
+                        if (opt === 'Todas')   setEligInput(totalInput)
+                        if (opt === 'Metade')  setEligInput(Math.floor(totalInput / 2))
+                        if (opt === 'Nenhuma') setEligInput(0)
+                      }}
+                    >
+                      {opt}
+                    </Button>
+                  ))}
+                </Stack>
               </Grid>
+
+              {/* Com BACEN */}
               <Grid size={{ xs: 12, sm: 3 }}>
                 <TextField
-                  fullWidth
-                  size="small"
-                  type="number"
+                  fullWidth size="small" type="number"
                   label="Com BACEN"
                   value={bacenInput}
                   onChange={e => setBacenInput(Math.max(0, Math.min(totalInput, Number(e.target.value))))}
                   slotProps={{ htmlInput: { min: 0, max: totalInput } }}
                   helperText={`0 – ${totalInput}`}
                 />
+                <Stack direction="row" spacing={0.75} sx={{ mt: 0.25 }}>
+                  {(['Todas', 'Metade', 'Nenhuma'] as const).map(opt => (
+                    <Button
+                      key={opt}
+                      size="small"
+                      variant="outlined"
+                      sx={{ minWidth: 0, px: 1, fontSize: '0.72rem', flex: 1 }}
+                      onClick={() => {
+                        if (opt === 'Todas')   setBacenInput(totalInput)
+                        if (opt === 'Metade')  setBacenInput(Math.floor(totalInput / 2))
+                        if (opt === 'Nenhuma') setBacenInput(0)
+                      }}
+                    >
+                      {opt}
+                    </Button>
+                  ))}
+                </Stack>
               </Grid>
-              <Grid size={{ xs: 12, sm: 3 }}>
-                <Button variant="contained" fullWidth onClick={handleApply} startIcon={<TuneIcon />}>
+
+              {/* Botão gerar */}
+              <Grid size={{ xs: 12, sm: 3 }} sx={{ display: 'flex', alignItems: 'flex-start' }}>
+                <Button variant="contained" fullWidth onClick={handleApply} startIcon={<TuneIcon />} sx={{ mt: 0.25 }}>
                   Gerar propostas
                 </Button>
               </Grid>
+
             </Grid>
           </Box>
         </Collapse>
@@ -635,12 +699,12 @@ export function BatchProposalsPage() {
 
           {/* Botão executar abaixo da tabela */}
           {!hasRun && (
-            <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 2, gap: 1 }}>
+            <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 2 }}>
               <Button
                 variant="contained"
                 startIcon={running ? <CircularProgress size={16} color="inherit" /> : <PlayArrowIcon />}
                 onClick={handleRun}
-                disabled={running || !activeCredential}
+                disabled={!canRun}
               >
                 {running ? 'Executando…' : 'Executar lote'}
               </Button>
