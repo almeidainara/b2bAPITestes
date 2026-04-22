@@ -150,7 +150,6 @@ interface ProposalConfig {
   fullName: string
   gender: 'MALE'|'FEMALE'
   checkEligibility: boolean
-  addBacen: boolean
 }
 
 type ProposalStatus = 'idle'|'running'|'success'|'error'
@@ -166,13 +165,13 @@ interface ProposalResult {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function generateConfigs(total: number, eligCount: number, bacenCount: number): ProposalConfig[] {
+function generateConfigs(total: number, eligCount: number): ProposalConfig[] {
   const cpfs = randomTestCpfs(total)
   const salt = Date.now()
   return Array.from({ length: total }, (_, i) => {
     const gender: 'MALE'|'FEMALE' = Math.random()>0.5 ? 'MALE' : 'FEMALE'
     const fullName = randomName(gender)
-    return { label: `Proposta ${i+1}`, cpf: cpfs[i], email: randomEmail(fullName, salt+i), fullName, gender, checkEligibility: i<eligCount, addBacen: i<bacenCount }
+    return { label: `Proposta ${i+1}`, cpf: cpfs[i], email: randomEmail(fullName, salt+i), fullName, gender, checkEligibility: i<eligCount }
   })
 }
 
@@ -215,7 +214,7 @@ export function BatchProposalsPage() {
   // Inputs do bloco de configuração
   const [totalInput, setTotalInput] = useState(DEFAULT_TOTAL)
   const [eligInput, setEligInput]   = useState(DEFAULT_TOTAL)
-  const [bacenInput, setBacenInput] = useState(DEFAULT_TOTAL)
+  const [endpoint, setEndpoint]     = useState<'/proposals' | '/proposals/home'>('/proposals')
 
   // Tabela de propostas
   const [configs, setConfigs] = useState<ProposalConfig[]>([])
@@ -233,9 +232,8 @@ export function BatchProposalsPage() {
   const handleApply = () => {
     const total = Math.max(1, Math.min(20, totalInput))
     const elig  = Math.max(0, Math.min(total, eligInput))
-    const bacen = Math.max(0, Math.min(total, bacenInput))
-    setTotalInput(total); setEligInput(elig); setBacenInput(bacen)
-    setConfigs(generateConfigs(total, elig, bacen))
+    setTotalInput(total); setEligInput(elig)
+    setConfigs(generateConfigs(total, elig))
     setResults(Array.from({ length: total }, () => ({ status: 'idle' as ProposalStatus })))
     setHasRun(false)
     setConfigOpen(false)
@@ -300,13 +298,14 @@ export function BatchProposalsPage() {
       // Body sempre aleatório
       const body = buildRandomBody(cfg.cpf, cfg.email, cfg.fullName, cfg.gender, i)
 
-      // Criar proposta
-      const affiliateHeaders = cfg.addBacen
-        ? { bacenAuthorizedAt: new Date().toISOString().substring(0,16), userAgent: 'creditas-api-tester-batch', userIp: '191.47.43.210' }
-        : { userAgent: 'creditas-api-tester-batch', userIp: '191.47.43.210' }
+      const affiliateHeaders = {
+        bacenAuthorizedAt: new Date().toISOString().substring(0, 16),
+        userAgent: 'creditas-api-tester-batch',
+        userIp: '191.47.43.210',
+      }
 
       try {
-        const res = await createHomeRefiProposal(body, affiliateHeaders)
+        const res = await createHomeRefiProposal(body, affiliateHeaders, endpoint)
         updateResult(i, { status: 'success', eligibilityTrace, eligibilityPassed, proposalTrace: res.trace, proposalId: res.data.id })
         ok++
       } catch (e: unknown) {
@@ -321,11 +320,11 @@ export function BatchProposalsPage() {
     pushNotification(err===0 ? 'success' : ok>0 ? 'warning' : 'error', `Lote concluído: ${ok} sucesso(s), ${err} erro(s)`)
   }
 
-  const successCount  = results.filter(r => r.status==='success').length
-  const errorCount    = results.filter(r => r.status==='error').length
-  const idleCount     = results.filter(r => r.status==='idle').length
-  const isConsultant  = activeCredential?.authType === 'consultant'
-  const canRun        = !!activeCredential && !isConsultant && !running
+  const successCount = results.filter(r => r.status==='success').length
+  const errorCount   = results.filter(r => r.status==='error').length
+  const idleCount    = results.filter(r => r.status==='idle').length
+  const isConsultant = activeCredential?.authType === 'consultant'
+  const canRun       = !!activeCredential && !isConsultant && !running
 
   return (
     <Box>
@@ -388,7 +387,7 @@ export function BatchProposalsPage() {
               <Stack direction="row" spacing={0.75} sx={{ ml: 1 }}>
                 <Chip size="small" label={`${configs.length} propostas`} variant="outlined" sx={{ fontSize: '0.65rem', height: 20 }} />
                 <Chip size="small" label={`${configs.filter(c=>c.checkEligibility).length} elig.`} color="secondary" variant="outlined" sx={{ fontSize: '0.65rem', height: 20 }} />
-                <Chip size="small" label={`${configs.filter(c=>c.addBacen).length} BACEN`} color="primary" variant="outlined" sx={{ fontSize: '0.65rem', height: 20 }} />
+                <Chip size="small" label={endpoint} variant="outlined" sx={{ fontSize: '0.65rem', height: 20, fontFamily: 'monospace' }} />
               </Stack>
             )}
           </Stack>
@@ -420,7 +419,6 @@ export function BatchProposalsPage() {
                     const v = Math.max(1, Math.min(20, Number(e.target.value)))
                     setTotalInput(v)
                     if (eligInput > v) setEligInput(v)
-                    if (bacenInput > v) setBacenInput(v)
                   }}
                   slotProps={{ htmlInput: { min: 1, max: 20 } }}
                 />
@@ -435,7 +433,6 @@ export function BatchProposalsPage() {
                         const v = n === 1 ? 1 : Math.min(20, totalInput + n)
                         setTotalInput(v)
                         if (eligInput > v) setEligInput(v)
-                        if (bacenInput > v) setBacenInput(v)
                       }}
                     >
                       {n === 1 ? '1' : `+${n}`}
@@ -474,30 +471,21 @@ export function BatchProposalsPage() {
                 </Stack>
               </Grid>
 
-              {/* Com BACEN */}
+              {/* Endpoint */}
               <Grid size={{ xs: 12, sm: 3 }}>
-                <TextField
-                  fullWidth size="small" type="number"
-                  label="Com BACEN"
-                  value={bacenInput}
-                  onChange={e => setBacenInput(Math.max(0, Math.min(totalInput, Number(e.target.value))))}
-                  slotProps={{ htmlInput: { min: 0, max: totalInput } }}
-                  helperText={`0 – ${totalInput}`}
-                />
-                <Stack direction="row" spacing={0.75} sx={{ mt: 0.25 }}>
-                  {(['Todas', 'Metade', 'Nenhuma'] as const).map(opt => (
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.75 }}>
+                  Endpoint
+                </Typography>
+                <Stack direction="column" spacing={0.75}>
+                  {(['/proposals', '/proposals/home'] as const).map(ep => (
                     <Button
-                      key={opt}
+                      key={ep}
                       size="small"
-                      variant="outlined"
-                      sx={{ minWidth: 0, px: 1, fontSize: '0.72rem', flex: 1 }}
-                      onClick={() => {
-                        if (opt === 'Todas')   setBacenInput(totalInput)
-                        if (opt === 'Metade')  setBacenInput(Math.floor(totalInput / 2))
-                        if (opt === 'Nenhuma') setBacenInput(0)
-                      }}
+                      variant={endpoint === ep ? 'contained' : 'outlined'}
+                      onClick={() => setEndpoint(ep)}
+                      sx={{ fontFamily: 'monospace', fontSize: '0.72rem', justifyContent: 'flex-start' }}
                     >
-                      {opt}
+                      POST {ep}
                     </Button>
                   ))}
                 </Stack>
@@ -505,7 +493,7 @@ export function BatchProposalsPage() {
 
               {/* Botão gerar */}
               <Grid size={{ xs: 12, sm: 3 }} sx={{ display: 'flex', alignItems: 'flex-start' }}>
-                <Button variant="contained" fullWidth onClick={handleApply} startIcon={<TuneIcon />} sx={{ mt: 0.25 }}>
+                <Button variant="contained" fullWidth onClick={handleApply} startIcon={<TuneIcon />} sx={{ mt: 2.5 }}>
                   Gerar propostas
                 </Button>
               </Grid>
@@ -540,9 +528,6 @@ export function BatchProposalsPage() {
                   <TableCell sx={{ fontWeight: 600 }}>E-mail</TableCell>
                   <TableCell sx={{ fontWeight: 600, textAlign: 'center', width: 60 }}>
                     <Tooltip title="Verificar elegibilidade antes de criar"><span>Elig.</span></Tooltip>
-                  </TableCell>
-                  <TableCell sx={{ fontWeight: 600, textAlign: 'center', width: 60 }}>
-                    <Tooltip title="Incluir X-Bacen-Authorized-At"><span>BACEN</span></Tooltip>
                   </TableCell>
                   <TableCell sx={{ fontWeight: 600, width: 120 }}>Status</TableCell>
                   <TableCell sx={{ width: 40 }} />
@@ -617,15 +602,6 @@ export function BatchProposalsPage() {
                           />
                         </TableCell>
 
-                        <TableCell align="center">
-                          <Checkbox
-                            checked={cfg.addBacen}
-                            size="small" color="primary"
-                            disabled={running || isLocked}
-                            onChange={e => updateConfig(idx, { addBacen: e.target.checked })}
-                          />
-                        </TableCell>
-
                         <TableCell>
                           <StatusChip status={result?.status ?? 'idle'} />
                         </TableCell>
@@ -642,7 +618,7 @@ export function BatchProposalsPage() {
 
                       {/* ── Linha de detalhes (collapse) ── */}
                       <TableRow>
-                        <TableCell colSpan={8} sx={{ p: 0, border: 0 }}>
+                        <TableCell colSpan={7} sx={{ p: 0, border: 0 }}>
                           <Collapse in={isExpanded} unmountOnExit>
                             <Box sx={{ p: 2, backgroundColor: `${tokens.colors.neutral[95]}`, borderBottom: `1px solid ${tokens.colors.neutral[80]}` }}>
                               {result?.eligibilityTrace && (
@@ -672,9 +648,7 @@ export function BatchProposalsPage() {
                                     <Typography variant="caption" sx={{ fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5 }}>
                                       Proposta HOME_REFI
                                     </Typography>
-                                    {cfg.addBacen && (
-                                      <Chip size="small" label="X-Bacen-Authorized-At" variant="outlined" sx={{ fontSize: '0.65rem' }} />
-                                    )}
+                                    <Chip size="small" label="X-Bacen-Authorized-At" variant="outlined" sx={{ fontSize: '0.65rem' }} />
                                     {result.proposalId && (
                                       <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center', ml: 'auto' }}>
                                         <Chip size="small" label={result.proposalId} color="success" sx={{ fontFamily: 'monospace', fontSize: '0.65rem' }} />

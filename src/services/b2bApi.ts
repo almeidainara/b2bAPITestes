@@ -160,11 +160,12 @@ function stripEmpty<T extends object>(obj: T): Partial<T> {
 export async function createHomeRefiProposal(
   body: CreateHomeRefiProposalRequest,
   affiliateHeaders: AffiliateProposalHeaders = {},
+  endpoint: '/proposals' | '/proposals/home' = '/proposals',
 ): Promise<{ data: HomeRefiProposalResponse; trace: ApiTrace }> {
   const extra: Record<string, string> = {
     'X-User-Agent': affiliateHeaders.userAgent ?? 'creditas-api-tester',
     'X-User-Ip': affiliateHeaders.userIp ?? '191.47.43.210',
-    // Sempre obrigatório pela API — formato: YYYY-MM-DDTHH:mm (sem segundos, sem timezone)
+    // BACEN sempre obrigatório — formato: YYYY-MM-DDTHH:mm
     'X-Bacen-Authorized-At': affiliateHeaders.bacenAuthorizedAt ?? new Date().toISOString().substring(0, 16),
   }
 
@@ -180,7 +181,7 @@ export async function createHomeRefiProposal(
   }
 
   return request<HomeRefiProposalResponse>(
-    { method: 'POST', url: '/proposals', data: cleanBody },
+    { method: 'POST', url: endpoint, data: cleanBody },
     extra,
   )
 }
