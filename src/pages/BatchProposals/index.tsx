@@ -4,7 +4,7 @@ import ErrorIcon from '@mui/icons-material/Error'
 import HourglassEmptyIcon from '@mui/icons-material/HourglassEmpty'
 import PlayArrowIcon from '@mui/icons-material/PlayArrow'
 import RadioButtonUncheckedIcon from '@mui/icons-material/RadioButtonUnchecked'
-import RestartAltIcon from '@mui/icons-material/RestartAlt'
+import TuneIcon from '@mui/icons-material/Tune'
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
 import {
   Accordion,
@@ -18,7 +18,9 @@ import {
   CircularProgress,
   Divider,
   Grid,
+  InputAdornment,
   Paper,
+  Slider,
   Stack,
   Table,
   TableBody,
@@ -37,9 +39,6 @@ import type { ApiTrace, CreateHomeRefiProposalRequest } from '../../types/api'
 import tokens from '../../theme/tokens'
 import { randomTestCpf, randomTestCpfs } from '../../utils/cpf'
 
-// Mapa de bodies aleatórios (preenchido pelo Aleatorizar; vazio = usa buildDefaultBody)
-type RandomBodies = Record<number, CreateHomeRefiProposalRequest>
-
 // ── Random data helpers ───────────────────────────────────────────────────────
 
 function rnd(min: number, max: number) {
@@ -50,7 +49,7 @@ function pick<T>(arr: T[]): T {
   return arr[Math.floor(Math.random() * arr.length)]
 }
 
-const FIRST_NAMES_MALE = ['Bruno','Diego','Felipe','Henrique','Joao','Lucas','Nuno','Paulo','Rafael','Thiago','Vitor']
+const FIRST_NAMES_MALE   = ['Bruno','Diego','Felipe','Henrique','Joao','Lucas','Nuno','Paulo','Rafael','Thiago','Vitor']
 const FIRST_NAMES_FEMALE = ['Ana','Carla','Eva','Gabriela','Isabela','Karen','Marina','Olivia','Sofia','Wanda','Yasmin']
 const LAST_NAMES = [
   'Silva','Santos','Oliveira','Souza','Rodrigues','Ferreira','Alves','Pereira',
@@ -106,13 +105,18 @@ function randomCollateralValue(loanAmount: number): number {
 function randomTerm(): number {
   return pick([36, 60, 84, 120, 180, 240])
 }
-
 function randomPostalCodeFormatted(): string {
   const n = rnd(10000000, 99999999)
   return `${String(n).slice(0, 5)}-${String(n).slice(5)}`
 }
 
-function buildRandomProposalBody(cpf: string, email: string, fullName: string, gender: 'MALE' | 'FEMALE', idx: number): CreateHomeRefiProposalRequest {
+function buildRandomProposalBody(
+  cpf: string,
+  email: string,
+  fullName: string,
+  gender: 'MALE' | 'FEMALE',
+  idx: number,
+): CreateHomeRefiProposalRequest {
   const state = pick(STATES)
   const neighborhood = pick(NEIGHBORHOODS[state] ?? NEIGHBORHOODS.default)
   const street = pick(STREETS)
@@ -121,30 +125,21 @@ function buildRandomProposalBody(cpf: string, email: string, fullName: string, g
   const collateralValue = randomCollateralValue(loanAmount)
   const realEstateType = pick(REAL_ESTATE_TYPES)
   const purpose = pick(PURPOSES)
-  const maritalStatus = 'MARRIED'
   const borrowerIncome = randomIncome()
   const spouseIncome = randomIncome()
   const profStatus = pick(PROFESSIONAL_STATUSES)
-  const cityMap: Record<string, string> = { SP: 'São Paulo', RJ: 'Rio de Janeiro', MG: 'Belo Horizonte', RS: 'Porto Alegre', PR: 'Curitiba', BA: 'Salvador', SC: 'Florianópolis', GO: 'Goiânia', DF: 'Brasília', ES: 'Vitória' }
-  const city = cityMap[state] ?? 'São Paulo'
-  const complement = pick(['Apto 101','Apto 203','Casa','Bloco A','Cobertura', undefined])
-
-  const collateralAddress = {
-    address: street,
-    number: String(rnd(1, 9999)),
-    city,
-    ...(complement ? { complement } : {}),
-    state,
-    neighborhood,
-    postalCode,
-    country: 'BR',
+  const cityMap: Record<string, string> = {
+    SP: 'São Paulo', RJ: 'Rio de Janeiro', MG: 'Belo Horizonte', RS: 'Porto Alegre',
+    PR: 'Curitiba', BA: 'Salvador', SC: 'Florianópolis', GO: 'Goiânia', DF: 'Brasília', ES: 'Vitória',
   }
+  const city = cityMap[state] ?? 'São Paulo'
+  const complement = pick(['Apto 101', 'Apto 203', 'Casa', 'Bloco A', 'Cobertura', undefined])
 
   return {
     productType: 'HOME_REFI',
     purpose,
     metadata: { version: '1.0.0', experiments: ['LF_B2B_SIMPLIFY'], externalId: `batch-${idx + 1}-${Date.now()}` },
-    urgency: pick(['ONE_MONTH','TWO_MONTHS','SIX_MONTHS','JUST_SEARCHING']),
+    urgency: pick(['ONE_MONTH', 'TWO_MONTHS', 'SIX_MONTHS', 'JUST_SEARCHING']),
     formReference: `creditas-api-tester-batch-${idx + 1}`,
     conditions: { installment: { term: randomTerm() } },
     borrower: {
@@ -156,16 +151,13 @@ function buildRandomProposalBody(cpf: string, email: string, fullName: string, g
       cellphone: randomPhone(),
       cellphoneCode: String(rnd(11, 99)),
       postalCode,
-      maritalStatus,
+      maritalStatus: 'MARRIED',
       stableUnion: false,
       nationality: 'Brasileiro',
       familyMonthlyIncome: borrowerIncome + spouseIncome,
       monthlyIncome: borrowerIncome,
       professionalStatus: profStatus,
-      professionalInfo: {
-        professionalStatus: profStatus,
-        monthlyIncome: borrowerIncome,
-      },
+      professionalInfo: { professionalStatus: profStatus, monthlyIncome: borrowerIncome },
       optIns: { email: Math.random() > 0.5, whatsApp: true, sms: false },
       authorizationTerms:
         'Ao continuar, você autoriza o parceiro Creditas a consultar o seu histórico de crédito no Sistema de Informações de Crédito – SCR do Banco Central do Brasil.',
@@ -182,75 +174,18 @@ function buildRandomProposalBody(cpf: string, email: string, fullName: string, g
     },
     intendedCredit: { currency: 'BRL', amount: loanAmount },
     collateral: {
-      ...collateralAddress,
+      address: street,
+      number: String(rnd(1, 9999)),
+      city,
+      ...(complement ? { complement } : {}),
+      state,
+      neighborhood,
+      postalCode,
+      country: 'BR',
       value: collateralValue,
       debt: rnd(0, 1) === 0 ? 0 : rnd(1, 5) * 10000,
       realEstateType,
       hasDeed: pick(['YES', 'YES', 'YES', 'NO', 'DO_NOT_KNOW']),
-      owners: ['BORROWER'],
-    },
-  }
-}
-
-// ── Default bodies (determinísticos) ─────────────────────────────────────────
-
-function buildDefaultBody(cfg: ProposalConfig, idx: number): CreateHomeRefiProposalRequest {
-  const income = 5000 + idx * 500
-  return {
-    productType: 'HOME_REFI',
-    purpose: 'OTHERS',
-    metadata: { version: '1.0.0', experiments: ['LF_B2B_SIMPLIFY'], externalId: `batch-home-refi-${idx + 1}` },
-    urgency: 'ONE_MONTH',
-    formReference: `creditas-api-tester-batch-${idx + 1}`,
-    conditions: { installment: { term: 240 } },
-    borrower: {
-      cpf: cfg.cpf,
-      fullName: cfg.fullName,
-      email: cfg.email,
-      gender: 'MALE',
-      birthDate: '1988-03-22',
-      cellphone: `9912345${String(idx).padStart(2, '0')}`,
-      cellphoneCode: '11',
-      postalCode: '01310-100',
-      maritalStatus: 'MARRIED',
-      stableUnion: false,
-      nationality: 'Brasileiro',
-      familyMonthlyIncome: income * 2,
-      monthlyIncome: income,
-      professionalStatus: 'CLT',
-      professionalInfo: {
-        professionalStatus: 'CLT',
-        monthlyIncome: income,
-        description: 'Analista de TI',
-      },
-      optIns: { email: true, whatsApp: true, sms: false },
-      authorizationTerms:
-        'Ao continuar, você autoriza o parceiro Creditas a consultar o seu histórico de crédito no Sistema de Informações de Crédito – SCR do Banco Central do Brasil.',
-      spouse: {
-        cpf: generateTestCpf(idx + 10),
-        fullName: SPOUSE_NAMES[idx % SPOUSE_NAMES.length],
-        email: `conjuge.lote${idx + 1}@tuamaeaquelaursa.com`,
-        birthDate: '1990-05-10',
-        cellphone: `9887654${String(idx).padStart(2, '0')}`,
-        cellphoneCode: '11',
-        nationality: 'Brasileiro',
-        isCosigner: false,
-      },
-    },
-    intendedCredit: { currency: 'BRL', amount: 80000 + idx * 10000 },
-    collateral: {
-      value: 500000,
-      debt: 0,
-      realEstateType: 'APARTMENT',
-      address: 'Rua das Flores',
-      number: String(100 + idx),
-      complement: `Apto ${idx + 1}`,
-      neighborhood: 'Centro',
-      city: 'São Paulo',
-      state: 'SP',
-      postalCode: '01310-100',
-      country: 'BR',
-      hasDeed: 'YES',
       owners: ['BORROWER'],
     },
   }
@@ -263,9 +198,9 @@ interface ProposalConfig {
   cpf: string
   email: string
   fullName: string
+  gender: 'MALE' | 'FEMALE'
   checkEligibility: boolean
   addBacen: boolean
-  // Sem `body` no estado — sempre reconstruído em handleRun para evitar cache stale do HMR
 }
 
 type ProposalStatus = 'idle' | 'running' | 'success' | 'error'
@@ -279,20 +214,26 @@ interface ProposalResult {
   error?: string
 }
 
-// ── Default config matrix ─────────────────────────────────────────────────────
+// ── Config generator ──────────────────────────────────────────────────────────
 
-function buildDefaultConfigs(): ProposalConfig[] {
-  // CPFs únicos gerados a cada chamada — nunca repete entre execuções
-  const cpfs = randomTestCpfs(6)
+/** Gera N configs aleatórias distribuindo elegibilidade e BACEN conforme contagens */
+function generateConfigs(total: number, eligCount: number, bacenCount: number): ProposalConfig[] {
+  const cpfs = randomTestCpfs(total)
   const salt = Date.now()
-  return [
-    { label: 'Proposta 1', cpf: cpfs[0], email: `batch.1.${salt}@tuamaeaquelaursa.com`, fullName: 'Ana Lote Silva',       checkEligibility: true,  addBacen: true  },
-    { label: 'Proposta 2', cpf: cpfs[1], email: `batch.2.${salt}@tuamaeaquelaursa.com`, fullName: 'Bruno Lote Oliveira',  checkEligibility: true,  addBacen: true  },
-    { label: 'Proposta 3', cpf: cpfs[2], email: `batch.3.${salt}@tuamaeaquelaursa.com`, fullName: 'Carla Lote Santos',    checkEligibility: true,  addBacen: true  },
-    { label: 'Proposta 4', cpf: cpfs[3], email: `batch.4.${salt}@tuamaeaquelaursa.com`, fullName: 'Diego Lote Ferreira',  checkEligibility: false, addBacen: true  },
-    { label: 'Proposta 5', cpf: cpfs[4], email: `batch.5.${salt}@tuamaeaquelaursa.com`, fullName: 'Eva Lote Costa',       checkEligibility: true,  addBacen: false },
-    { label: 'Proposta 6', cpf: cpfs[5], email: `batch.6.${salt}@tuamaeaquelaursa.com`, fullName: 'Felipe Lote Pereira',  checkEligibility: false, addBacen: false },
-  ]
+  return Array.from({ length: total }, (_, i) => {
+    const gender: 'MALE' | 'FEMALE' = Math.random() > 0.5 ? 'MALE' : 'FEMALE'
+    const fullName = randomName(gender)
+    const email = randomEmail(fullName, salt + i)
+    return {
+      label: `Proposta ${i + 1}`,
+      cpf: cpfs[i],
+      email,
+      fullName,
+      gender,
+      checkEligibility: i < eligCount,
+      addBacen: i < bacenCount,
+    }
+  })
 }
 
 // ── Status chip ───────────────────────────────────────────────────────────────
@@ -308,13 +249,27 @@ function StatusChip({ status }: { status: ProposalStatus }) {
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
+const DEFAULT_TOTAL = 6
+const DEFAULT_ELIG  = 4
+const DEFAULT_BACEN = 6
+const MAX_PROPOSALS = 20
+
 export function BatchProposalsPage() {
   const { activeCredential, pushNotification } = useApp()
-  const [configs, setConfigs] = useState<ProposalConfig[]>(buildDefaultConfigs)
-  const [results, setResults] = useState<ProposalResult[]>(() => Array.from({ length: 6 }, () => ({ status: 'idle' as ProposalStatus })))
-  // Bodies aleatórios separados para que os padrões sempre reconstruam do zero (evita estado stale no HMR)
-  const [randomBodies, setRandomBodies] = useState<RandomBodies>({})
-  const [running, setRunning] = useState(false)
+
+  // ── Controles de configuração ──
+  const [totalInput, setTotalInput] = useState(DEFAULT_TOTAL)
+  const [eligInput, setEligInput]   = useState(DEFAULT_ELIG)
+  const [bacenInput, setBacenInput] = useState(DEFAULT_BACEN)
+
+  // ── Estado da tabela ──
+  const [configs, setConfigs] = useState<ProposalConfig[]>(() =>
+    generateConfigs(DEFAULT_TOTAL, DEFAULT_ELIG, DEFAULT_BACEN),
+  )
+  const [results, setResults] = useState<ProposalResult[]>(() =>
+    Array.from({ length: DEFAULT_TOTAL }, () => ({ status: 'idle' as ProposalStatus })),
+  )
+  const [running, setRunning]   = useState(false)
   const [expanded, setExpanded] = useState<number | null>(null)
 
   const updateConfig = (idx: number, patch: Partial<ProposalConfig>) =>
@@ -323,51 +278,45 @@ export function BatchProposalsPage() {
   const updateResult = (idx: number, patch: Partial<ProposalResult>) =>
     setResults(prev => prev.map((r, i) => (i === idx ? { ...r, ...patch } : r)))
 
-  // ── Reset (determinístico) ──
-  const handleReset = () => {
-    const fresh = buildDefaultConfigs()
+  // ── Aplicar configuração — gera novos dados aleatórios ──
+  const handleApply = () => {
+    const total = Math.max(1, Math.min(MAX_PROPOSALS, totalInput))
+    const elig  = Math.max(0, Math.min(total, eligInput))
+    const bacen = Math.max(0, Math.min(total, bacenInput))
+    setTotalInput(total)
+    setEligInput(elig)
+    setBacenInput(bacen)
+    const fresh = generateConfigs(total, elig, bacen)
     setConfigs(fresh)
-    setRandomBodies({})
-    setResults(fresh.map(() => ({ status: 'idle' })))
+    setResults(Array.from({ length: total }, () => ({ status: 'idle' })))
     setExpanded(null)
-    pushNotification('info', 'Dados resetados para o padrão')
+    pushNotification('success', `${total} proposta(s) gerada(s) — ${elig} com elig., ${bacen} com BACEN`)
   }
 
-  // ── Randomize (dados aleatórios, mantém matriz eligibility/BACEN) ──
+  // ── Aleatorizar mantendo a tabela atual (só gera novos dados de pessoa/imóvel) ──
   const handleRandomize = () => {
-    const salt = Date.now()
-    // Gera os dados fora do setConfigs para evitar inconsistência com double-invoke do StrictMode
-    const generated = Array.from({ length: 6 }, (_, idx) => {
-      const cpf = randomTestCpf()
+    const total = configs.length
+    const salt  = Date.now()
+    const cpfs  = randomTestCpfs(total)
+    setConfigs(prev => prev.map((cfg, i) => {
       const gender: 'MALE' | 'FEMALE' = Math.random() > 0.5 ? 'MALE' : 'FEMALE'
       const fullName = randomName(gender)
-      const email = randomEmail(fullName, salt + idx)
-      return { cpf, gender, fullName, email }
-    })
-    const newBodies: RandomBodies = {}
-    generated.forEach(({ cpf, gender, fullName, email }, idx) => {
-      newBodies[idx] = buildRandomProposalBody(cpf, email, fullName, gender, idx)
-    })
-    setConfigs(prev => prev.map((cfg, idx) => ({
-      ...cfg,
-      cpf: generated[idx].cpf,
-      email: generated[idx].email,
-      fullName: generated[idx].fullName,
-    })))
-    setRandomBodies(newBodies)
-    setResults(Array.from({ length: 6 }, () => ({ status: 'idle' })))
+      const email = randomEmail(fullName, salt + i)
+      return { ...cfg, cpf: cpfs[i], email, fullName, gender }
+    }))
+    setResults(Array.from({ length: total }, () => ({ status: 'idle' })))
     setExpanded(null)
-    pushNotification('success', 'Dados aleatórios gerados!')
+    pushNotification('success', 'Novos dados aleatórios gerados!')
   }
 
-  // ── Run ──
+  // ── Executar lote ──
   const handleRun = async () => {
     if (!activeCredential) {
       pushNotification('error', 'Selecione uma credencial de parceiro antes de executar')
       return
     }
 
-    // Gera CPFs únicos e frescos para cada execução (nunca reutiliza CPFs de runs anteriores)
+    // Gera CPFs únicos frescos para a execução — garante CPF igual entre elig. e proposta
     const freshCpfs = randomTestCpfs(configs.length)
     const salt = Date.now()
     const runConfigs = configs.map((cfg, i) => ({
@@ -376,22 +325,20 @@ export function BatchProposalsPage() {
       email: `batch.${i + 1}.${salt}@tuamaeaquelaursa.com`,
     }))
     setConfigs(runConfigs)
-
     setRunning(true)
-    setResults(configs.map(() => ({ status: 'idle' })))
+    setResults(runConfigs.map(() => ({ status: 'idle' })))
 
     let successCount = 0
-    let errorCount = 0
+    let errorCount   = 0
 
     for (let i = 0; i < runConfigs.length; i++) {
       const cfg = runConfigs[i]
       updateResult(i, { status: 'running' })
       setExpanded(i)
 
+      // Step 1: Elegibilidade (opcional)
       let eligibilityTrace: ApiTrace | undefined
       let eligibilityPassed: boolean | undefined
-
-      // Step 1: Eligibility (optional)
       if (cfg.checkEligibility) {
         try {
           const res = await checkEligibility({ cpf: cfg.cpf, email: cfg.email, productType: 'HOME_REFINANCING' })
@@ -404,21 +351,10 @@ export function BatchProposalsPage() {
         }
       }
 
-      // Passo 2: Monta o body — aleatório se disponível, senão reconstrói o padrão com o código atual.
-      // Sempre sobrescreve cpf/email/fullName do borrower com os valores atuais do cfg
-      // para garantir que a proposta usa os mesmos dados da elegibilidade.
-      const baseBody = randomBodies[i] ?? buildDefaultBody(cfg, i)
-      const body: CreateHomeRefiProposalRequest = {
-        ...baseBody,
-        borrower: {
-          ...baseBody.borrower,
-          cpf: cfg.cpf,
-          email: cfg.email,
-          fullName: cfg.fullName,
-        },
-      }
+      // Step 2: Monta body completamente aleatório (sempre fresco)
+      const body = buildRandomProposalBody(cfg.cpf, cfg.email, cfg.fullName, cfg.gender, i)
 
-      // Passo 3: Criar proposta
+      // Step 3: Criar proposta
       const affiliateHeaders = cfg.addBacen
         ? { bacenAuthorizedAt: new Date().toISOString().substring(0, 16), userAgent: 'creditas-api-tester-batch', userIp: '191.47.43.210' }
         : { userAgent: 'creditas-api-tester-batch', userIp: '191.47.43.210' }
@@ -444,33 +380,29 @@ export function BatchProposalsPage() {
     setExpanded(null)
     pushNotification(
       errorCount === 0 ? 'success' : successCount > 0 ? 'warning' : 'error',
-      `Lote concluído: ${successCount} sucesso(s), ${errorCount} erro(s)`
+      `Lote concluído: ${successCount} sucesso(s), ${errorCount} erro(s)`,
     )
   }
 
-  const total = configs.length
+  const total        = configs.length
   const successCount = results.filter(r => r.status === 'success').length
-  const errorCount  = results.filter(r => r.status === 'error').length
-  const idleCount   = results.filter(r => r.status === 'idle').length
+  const errorCount   = results.filter(r => r.status === 'error').length
+  const idleCount    = results.filter(r => r.status === 'idle').length
+  const eligTotal    = configs.filter(c => c.checkEligibility).length
+  const bacenTotal   = configs.filter(c => c.addBacen).length
 
   return (
     <Box>
-      {/* Header */}
+      {/* ── Header ── */}
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 3 }}>
         <Box>
           <Typography variant="h5" gutterBottom>Criação em Lote — HOME_REFI</Typography>
           <Typography variant="body2" color="text.secondary">
-            Cria {total} propostas <code>POST /proposals/home</code> sequencialmente.
-            Mantém a matriz de eligibilidade/BACEN ao aleatorizar.
+            Configura e executa múltiplas propostas <code>POST /proposals</code> com dados aleatórios.
           </Typography>
         </Box>
         <Stack direction="row" spacing={1}>
-          <Tooltip title="Restaura CPFs, e-mails e nomes determinísticos padrão">
-            <Button variant="outlined" startIcon={<RestartAltIcon />} onClick={handleReset} disabled={running}>
-              Resetar
-            </Button>
-          </Tooltip>
-          <Tooltip title="Gera CPF, nome, e-mail e todos os dados da proposta aleatoriamente (dentro dos limites da API)">
+          <Tooltip title="Gera novos dados aleatórios mantendo a configuração atual de elig./BACEN">
             <Button variant="outlined" color="secondary" startIcon={<CasinoIcon />} onClick={handleRandomize} disabled={running}>
               Aleatorizar
             </Button>
@@ -492,7 +424,112 @@ export function BatchProposalsPage() {
         </Alert>
       )}
 
-      {/* Progress summary */}
+      {/* ── Painel de configuração ── */}
+      <Paper variant="outlined" sx={{ p: 2.5, mb: 3 }}>
+        <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mb: 2.5 }}>
+          <TuneIcon sx={{ fontSize: 18, color: tokens.colors.neutral[40] }} />
+          <Typography variant="subtitle2">Configuração do lote</Typography>
+        </Stack>
+
+        <Grid container spacing={3} sx={{ alignItems: 'flex-start' }}>
+          {/* Qtd de propostas */}
+          <Grid size={{ xs: 12, sm: 4 }}>
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
+              Total de propostas
+            </Typography>
+            <TextField
+              type="number"
+              size="small"
+              fullWidth
+              value={totalInput}
+              onChange={e => {
+                const v = Math.max(1, Math.min(MAX_PROPOSALS, Number(e.target.value)))
+                setTotalInput(v)
+                if (eligInput > v) setEligInput(v)
+                if (bacenInput > v) setBacenInput(v)
+              }}
+              disabled={running}
+              slotProps={{
+                htmlInput: { min: 1, max: MAX_PROPOSALS, style: { fontFamily: 'monospace', fontWeight: 700, fontSize: '1.1rem' } },
+                input: { endAdornment: <InputAdornment position="end">/ {MAX_PROPOSALS}</InputAdornment> },
+              }}
+            />
+          </Grid>
+
+          {/* Com elegibilidade */}
+          <Grid size={{ xs: 12, sm: 4 }}>
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
+              Com verificação de elegibilidade&nbsp;
+              <Chip size="small" label={`${eligInput} de ${totalInput}`} color="secondary" variant="outlined" sx={{ fontSize: '0.65rem', height: 18 }} />
+            </Typography>
+            <Slider
+              value={eligInput}
+              min={0}
+              max={totalInput}
+              step={1}
+              marks
+              valueLabelDisplay="auto"
+              color="secondary"
+              disabled={running}
+              onChange={(_, v) => setEligInput(v as number)}
+              sx={{ mt: 1.5 }}
+            />
+          </Grid>
+
+          {/* Com BACEN */}
+          <Grid size={{ xs: 12, sm: 4 }}>
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
+              Com X-Bacen-Authorized-At&nbsp;
+              <Chip size="small" label={`${bacenInput} de ${totalInput}`} color="primary" variant="outlined" sx={{ fontSize: '0.65rem', height: 18 }} />
+            </Typography>
+            <Slider
+              value={bacenInput}
+              min={0}
+              max={totalInput}
+              step={1}
+              marks
+              valueLabelDisplay="auto"
+              disabled={running}
+              onChange={(_, v) => setBacenInput(v as number)}
+              sx={{ mt: 1.5 }}
+            />
+          </Grid>
+        </Grid>
+
+        <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 2.5 }}>
+          <Button
+            variant="outlined"
+            startIcon={<TuneIcon />}
+            onClick={handleApply}
+            disabled={running}
+          >
+            Gerar propostas
+          </Button>
+        </Box>
+      </Paper>
+
+      {/* ── Sumário da configuração atual ── */}
+      <Stack direction="row" spacing={1.5} sx={{ mb: 2, flexWrap: 'wrap', gap: 1 }}>
+        <Chip
+          size="small"
+          label={`${total} proposta${total !== 1 ? 's' : ''}`}
+          variant="outlined"
+        />
+        <Chip
+          size="small"
+          label={`${eligTotal} com elegibilidade`}
+          color="secondary"
+          variant={eligTotal > 0 ? 'filled' : 'outlined'}
+        />
+        <Chip
+          size="small"
+          label={`${bacenTotal} com BACEN`}
+          color="primary"
+          variant={bacenTotal > 0 ? 'filled' : 'outlined'}
+        />
+      </Stack>
+
+      {/* ── Progress summary ── */}
       {(!idleCount || successCount > 0 || errorCount > 0) && (
         <Paper variant="outlined" sx={{ p: 2, mb: 2 }}>
           <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
@@ -505,17 +542,18 @@ export function BatchProposalsPage() {
         </Paper>
       )}
 
-      {/* Config table */}
+      {/* ── Tabela de configuração ── */}
       <Paper variant="outlined" sx={{ mb: 3 }}>
         <Box sx={{ p: 2, pb: 1 }}>
           <Typography variant="subtitle2" color="text.secondary">
-            Configuração das propostas — edite CPF/e-mail manualmente ou clique em <strong>Aleatorizar</strong>
+            Configuração individual — edite CPF/e-mail ou marque/desmarque elig./BACEN por linha
           </Typography>
         </Box>
         <Table size="small">
           <TableHead>
             <TableRow>
-              <TableCell sx={{ fontWeight: 600 }}>Proposta</TableCell>
+              <TableCell sx={{ fontWeight: 600 }}>#</TableCell>
+              <TableCell sx={{ fontWeight: 600 }}>Nome</TableCell>
               <TableCell sx={{ fontWeight: 600 }}>CPF</TableCell>
               <TableCell sx={{ fontWeight: 600 }}>E-mail</TableCell>
               <TableCell sx={{ fontWeight: 600, textAlign: 'center' }}>
@@ -531,8 +569,12 @@ export function BatchProposalsPage() {
             {configs.map((cfg, idx) => (
               <TableRow key={idx} sx={{ '&:last-child td': { borderBottom: 0 } }}>
                 <TableCell>
-                  <Typography variant="body2" sx={{ fontWeight: 500 }}>{cfg.label}</Typography>
-                  <Typography variant="caption" color="text.secondary" noWrap sx={{ maxWidth: 140, display: 'block' }}>
+                  <Typography variant="caption" color="text.secondary" sx={{ fontFamily: 'monospace' }}>
+                    {idx + 1}
+                  </Typography>
+                </TableCell>
+                <TableCell>
+                  <Typography variant="caption" color="text.secondary" noWrap sx={{ maxWidth: 160, display: 'block' }}>
                     {cfg.fullName}
                   </Typography>
                 </TableCell>
@@ -548,7 +590,7 @@ export function BatchProposalsPage() {
                   <TextField
                     size="small" value={cfg.email} disabled={running}
                     onChange={e => updateConfig(idx, { email: e.target.value })}
-                    sx={{ width: 220 }}
+                    sx={{ width: 210 }}
                   />
                 </TableCell>
                 <TableCell align="center">
@@ -572,23 +614,7 @@ export function BatchProposalsPage() {
         </Table>
       </Paper>
 
-      {/* Legend */}
-      <Grid container spacing={1} sx={{ mb: 3 }}>
-        <Grid size={{ xs: 12, sm: 6 }}>
-          <Paper variant="outlined" sx={{ p: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
-            <Box sx={{ width: 12, height: 12, borderRadius: '50%', backgroundColor: tokens.colors.secondary[40], flexShrink: 0 }} />
-            <Typography variant="caption" color="text.secondary">Elig.: verifica elegibilidade antes de criar</Typography>
-          </Paper>
-        </Grid>
-        <Grid size={{ xs: 12, sm: 6 }}>
-          <Paper variant="outlined" sx={{ p: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
-            <Box sx={{ width: 12, height: 12, borderRadius: '50%', backgroundColor: tokens.colors.primary[40], flexShrink: 0 }} />
-            <Typography variant="caption" color="text.secondary">BACEN: envia X-Bacen-Authorized-At no header</Typography>
-          </Paper>
-        </Grid>
-      </Grid>
-
-      {/* Results */}
+      {/* ── Resultados ── */}
       {results.some(r => r.status !== 'idle') && (
         <Box>
           <Typography variant="subtitle1" sx={{ mb: 1.5, fontWeight: 600 }}>Resultados</Typography>
@@ -652,7 +678,7 @@ export function BatchProposalsPage() {
                       </Stack>
                       <ApiPanel
                         trace={result.proposalTrace}
-                        title="POST /proposals/home"
+                        title="POST /proposals"
                         defaultExpanded={result.status === 'error'}
                       />
                     </Box>
@@ -664,16 +690,16 @@ export function BatchProposalsPage() {
         </Box>
       )}
 
-      {/* Empty state */}
+      {/* ── Empty state ── */}
       {results.every(r => r.status === 'idle') && (
         <Paper variant="outlined" sx={{ p: 6, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, color: 'text.secondary' }}>
           <HourglassEmptyIcon sx={{ fontSize: 48, color: tokens.colors.neutral[60] }} />
           <Typography variant="body2">
-            Configure as propostas acima e clique em <strong>Executar lote</strong>.
+            Configure o lote acima e clique em <strong>Executar lote</strong>.
           </Typography>
-          <Typography variant="caption">
-            Use <strong>Aleatorizar</strong> para gerar dados válidos aleatoriamente (CPF, nome, renda, imóvel…)
-            mantendo a matriz de eligibilidade/BACEN.
+          <Typography variant="caption" sx={{ textAlign: 'center' }}>
+            Use <strong>Gerar propostas</strong> para aplicar nova quantidade e distribuição de elig./BACEN.
+            Use <strong>Aleatorizar</strong> para gerar novos dados mantendo a configuração atual.
           </Typography>
         </Paper>
       )}
