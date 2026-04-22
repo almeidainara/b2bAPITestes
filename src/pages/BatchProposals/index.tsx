@@ -31,7 +31,7 @@ import {
   Tooltip,
   Typography,
 } from '@mui/material'
-import { useState } from 'react'
+import { Fragment, useState } from 'react'
 import { ApiPanel } from '../../components/ApiPanel'
 import { useApp } from '../../context/AppContext'
 import { checkEligibility, createHomeRefiProposal } from '../../services/b2bApi'
@@ -555,10 +555,9 @@ export function BatchProposalsPage() {
                   const isLocked = hasRun
 
                   return (
-                    <>
+                    <Fragment key={idx}>
                       {/* ── Linha principal ── */}
                       <TableRow
-                        key={`row-${idx}`}
                         sx={{
                           backgroundColor: result?.status === 'error' ? `${tokens.colors.error[60]}0A` : result?.status === 'success' ? `${tokens.colors.primary[40]}08` : undefined,
                           '& td': { borderBottom: isExpanded ? 'none' : undefined },
@@ -642,7 +641,7 @@ export function BatchProposalsPage() {
                       </TableRow>
 
                       {/* ── Linha de detalhes (collapse) ── */}
-                      <TableRow key={`detail-${idx}`}>
+                      <TableRow>
                         <TableCell colSpan={8} sx={{ p: 0, border: 0 }}>
                           <Collapse in={isExpanded} unmountOnExit>
                             <Box sx={{ p: 2, backgroundColor: `${tokens.colors.neutral[95]}`, borderBottom: `1px solid ${tokens.colors.neutral[80]}` }}>
@@ -690,7 +689,7 @@ export function BatchProposalsPage() {
                           </Collapse>
                         </TableCell>
                       </TableRow>
-                    </>
+                    </Fragment>
                   )
                 })}
               </TableBody>
