@@ -108,6 +108,7 @@ function AutoCreateDrawer({ open, onClose, product }: AutoCreateDrawerProps) {
   const [bacenAuthorizedAt, setBacenAuthorizedAt] = useState(() => new Date().toISOString().substring(0, 16))
   const [userIp, setUserIp] = useState('191.47.43.210')
   const [userAgent, setUserAgent] = useState('creditas-api-tester')
+  const [homeEndpoint, setHomeEndpoint] = useState<'/proposals' | '/proposals/home'>('/proposals')
 
   const setStep = (name: keyof typeof steps, partial: Partial<StepState>) => {
     setSteps(s => ({ ...s, [name]: { ...s[name], ...partial } }))
@@ -200,7 +201,7 @@ function AutoCreateDrawer({ open, onClose, product }: AutoCreateDrawerProps) {
           bacenAuthorizedAt,
           userAgent,
           userIp,
-        })
+        }, homeEndpoint)
         setStep('proposal', { status: 'success', trace: res.trace })
         setProposalResult(res.data)
       } else {
@@ -453,6 +454,26 @@ function AutoCreateDrawer({ open, onClose, product }: AutoCreateDrawerProps) {
                     slotProps={{ htmlInput: { style: { fontFamily: 'monospace' } } }}
                   />
                 </Grid>
+
+                {/* Endpoint selector */}
+                <Grid size={{ xs: 12 }}>
+                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.75 }}>
+                    Endpoint
+                  </Typography>
+                  <Stack direction="row" spacing={1}>
+                    {(['/proposals', '/proposals/home'] as const).map(ep => (
+                      <Button
+                        key={ep}
+                        size="small"
+                        variant={homeEndpoint === ep ? 'contained' : 'outlined'}
+                        onClick={() => setHomeEndpoint(ep)}
+                        sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}
+                      >
+                        POST {ep}
+                      </Button>
+                    ))}
+                  </Stack>
+                </Grid>
               </Grid>
             </Box>
           </>
@@ -507,7 +528,7 @@ function AutoCreateDrawer({ open, onClose, product }: AutoCreateDrawerProps) {
           <ApiPanel trace={steps.offer.trace} title="2. POST /offers" />
         )}
         {steps.proposal.trace && (
-          <ApiPanel trace={steps.proposal.trace} title={isHomeRefi ? '2. POST /proposals/home' : '3. POST /proposals'} />
+          <ApiPanel trace={steps.proposal.trace} title={isHomeRefi ? `2. POST ${homeEndpoint}` : '3. POST /proposals'} />
         )}
       </Box>
 
