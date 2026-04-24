@@ -80,20 +80,29 @@ function PartnerJsonCard() {
 
   const isSessionActive = activeCredential?.id === SESSION_CREDENTIAL_ID && activeCredential?.authType === 'partner_client'
 
+  const sanitizeJson = (s: string) =>
+    s
+      .replace(/\uFEFF/g, '')          // BOM
+      .replace(/\u200B/g, '')          // zero-width space
+      .replace(/\u00A0/g, ' ')         // non-breaking space
+      .replace(/[\u2018\u2019]/g, "'") // smart single quotes
+      .replace(/[\u201C\u201D]/g, '"') // smart double quotes
+      .trim()
+
   const handleJsonChange = (value: string) => {
     setJsonText(value)
     setParseError('')
     setParsed(null)
     if (!value.trim()) return
     try {
-      const obj = JSON.parse(value) as PartnerClientJson
-      if (!obj.consumerKey && !obj.consumerSecret) {
+      const obj = JSON.parse(sanitizeJson(value)) as PartnerClientJson
+      if (!obj.consumerKey || !obj.consumerSecret) {
         setParseError('JSON não contém consumerKey / consumerSecret')
         return
       }
       setParsed(obj)
     } catch {
-      setParseError('JSON inválido')
+      setParseError('JSON inválido — verifique aspas e caracteres especiais')
     }
   }
 
